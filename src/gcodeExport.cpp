@@ -12,7 +12,6 @@ namespace cura {
 GCodeExport::GCodeExport()
 : output_stream(&std::cout)
 , currentPosition(0,0,MM2INT(20))
-, commandSocket(nullptr)
 , layer_nr(0)
 {
     current_e_value = 0;
@@ -30,8 +29,7 @@ GCodeExport::~GCodeExport()
 {
 }
 
-void GCodeExport::setCommandSocketAndLayerNr(CommandSocket* commandSocket_, unsigned int layer_nr_) {
-    commandSocket = commandSocket_;
+void GCodeExport::setLayerNr(unsigned int layer_nr_) {
     layer_nr = layer_nr_;
 }
 
@@ -402,16 +400,16 @@ void GCodeExport::writeMove(int x, int y, int z, double speed, double extrusion_
     else
     {
         *output_stream << "G0";
-                
-        if (commandSocket) 
+
+        if (CommandSocket::isInstantiated()) 
         {
             // we should send this travel as a non-retraction move
             cura::Polygons travelPoly;
             PolygonRef travel = travelPoly.newPoly();
             travel.add(Point(currentPosition.x, currentPosition.y));
             travel.add(Point(x, y));
-            commandSocket->sendPolygons(extruder_attr[current_extruder].retraction_e_amount_current ? PrintFeatureType::MoveRetraction : PrintFeatureType::MoveCombing, layer_nr, travelPoly, extruder_attr[current_extruder].retraction_e_amount_current ? MM2INT(0.2) : MM2INT(0.1));
-        }                    
+            CommandSocket::getInstance()->sendPolygons(extruder_attr[current_extruder].retraction_e_amount_current ? PrintFeatureType::MoveRetraction : PrintFeatureType::MoveCombing, layer_nr, travelPoly, extruder_attr[current_extruder].retraction_e_amount_current ? MM2INT(0.2) : MM2INT(0.1));
+        }
     }
 
     if (currentSpeed != speed)
@@ -631,8 +629,11 @@ void GCodeExport::finalize(double moveSpeed, const char* endCode)
 {
     writeFanCommand(0);
     writeCode(endCode);
-    log("Print time: %d\n", int(getTotalPrintTime()));
-    log("Filament: %d\n", int(getTotalFilamentUsed(0)));
+    int print_time = getTotalPrintTime();
+    int mat_0 = getTotalFilamentUsed(0);
+    log("Print time: %d\n", print_time);
+    log("Print time (readable): %dh %dm %ds\n", print_time / 60 / 60, (print_time / 60) % 60, print_time % 60);
+    log("Filament: %d\n", mat_0);
     for(int n=1; n<MAX_EXTRUDERS; n++)
         if (getTotalFilamentUsed(n) > 0)
             log("Filament%d: %d\n", n + 1, int(getTotalFilamentUsed(n)));

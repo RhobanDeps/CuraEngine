@@ -168,7 +168,7 @@ void PrimeTower::generatePaths3(SliceDataStorage& storage)
 {
         
     int n_patterns = 2; // alternating patterns between layers
-    double infill_overlap = 15; // so that it can't be zero
+    int infill_overlap = 60; // so that it can't be zero; EDIT: wtf?
     
     generateGroundpoly(storage);
     
@@ -179,14 +179,22 @@ void PrimeTower::generatePaths3(SliceDataStorage& storage)
         std::vector<Polygons>& patterns = patterns_per_extruder.back();
         for (int pattern_idx = 0; pattern_idx < n_patterns; pattern_idx++)
         {
-            generateLineInfill(ground_poly, -line_width/2, patterns[pattern_idx], line_width, line_width, infill_overlap, 45 + pattern_idx*90);
+            Polygons result_polygons; // should remain empty, since we generate lines pattern!
+            Polygons* in_between = nullptr;
+            bool avoidOverlappingPerimeters = false;
+            int outline_offset = -line_width/2;
+            int line_distance = line_width;
+            double fill_angle = 45 + pattern_idx * 90;
+            Polygons& result_lines = patterns[pattern_idx];
+            Infill infill_comp(EFillMethod::LINES, ground_poly, outline_offset, avoidOverlappingPerimeters, line_width, line_distance, infill_overlap, fill_angle);
+            infill_comp.generate(result_polygons, result_lines, in_between);
         }
     }
 }
 
     
 
-void PrimeTower::addToGcode(SliceDataStorage& storage, GCodePlanner& gcodeLayer, GCodeExport& gcode, int layer_nr, int prev_extruder, bool prime_tower_dir_outward, bool wipe, int* last_prime_tower_poly_printed, CommandSocket* command_socket)
+void PrimeTower::addToGcode(SliceDataStorage& storage, GCodePlanner& gcodeLayer, GCodeExport& gcode, int layer_nr, int prev_extruder, bool prime_tower_dir_outward, bool wipe, int* last_prime_tower_poly_printed)
 {
     if (!( storage.max_object_height_second_to_last_extruder >= 0 && storage.getSettingInMicrons("prime_tower_size") > 0) )
     {
@@ -206,10 +214,10 @@ void PrimeTower::addToGcode(SliceDataStorage& storage, GCodePlanner& gcodeLayer,
     {
         wipe = false;
     }
-    addToGcode3(storage, gcodeLayer, gcode, layer_nr, prev_extruder, prime_tower_dir_outward, wipe, last_prime_tower_poly_printed, command_socket);
+    addToGcode3(storage, gcodeLayer, gcode, layer_nr, prev_extruder, prime_tower_dir_outward, wipe, last_prime_tower_poly_printed);
 }
 
-void PrimeTower::addToGcode3(SliceDataStorage& storage, GCodePlanner& gcodeLayer, GCodeExport& gcode, int layer_nr, int prev_extruder, bool prime_tower_dir_outward, bool wipe, int* last_prime_tower_poly_printed, CommandSocket* command_socket)
+void PrimeTower::addToGcode3(SliceDataStorage& storage, GCodePlanner& gcodeLayer, GCodeExport& gcode, int layer_nr, int prev_extruder, bool prime_tower_dir_outward, bool wipe, int* last_prime_tower_poly_printed)
 {
     if (layer_nr > storage.max_object_height_second_to_last_extruder + 1)
     {
@@ -225,13 +233,13 @@ void PrimeTower::addToGcode3(SliceDataStorage& storage, GCodePlanner& gcodeLayer
     GCodePathConfig& config = config_per_extruder[new_extruder];
     int start_idx = 0; // TODO: figure out which idx is closest to the far right corner
     gcodeLayer.addPolygon(ground_poly.back(), start_idx, &config);
-    gcodeLayer.addLinesByOptimizer(pattern, &config);
+    gcodeLayer.addLinesByOptimizer(pattern, &config, SpaceFillType::Lines);
     
     last_prime_tower_poly_printed[new_extruder] = layer_nr;
 
-    if (command_socket)
+    if (CommandSocket::isInstantiated())
     {
-        command_socket->sendPolygons(PrintFeatureType::Support, layer_nr, pattern, config.getLineWidth());
+        CommandSocket::getInstance()->sendPolygons(PrintFeatureType::Support, layer_nr, pattern, config.getLineWidth());
     }
 
     if (wipe)
@@ -240,7 +248,7 @@ void PrimeTower::addToGcode3(SliceDataStorage& storage, GCodePlanner& gcodeLayer
     }
 }
 
-void PrimeTower::addToGcode_OLD(SliceDataStorage& storage, GCodePlanner& gcodeLayer, GCodeExport& gcode, int layer_nr, int prev_extruder, bool prime_tower_dir_outward, bool wipe, int* last_prime_tower_poly_printed, CommandSocket* command_socket)
+void PrimeTower::addToGcode_OLD(SliceDataStorage& storage, GCodePlanner& gcodeLayer, GCodeExport& gcode, int layer_nr, int prev_extruder, bool prime_tower_dir_outward, bool wipe, int* last_prime_tower_poly_printed)
 {
     if (layer_nr > storage.max_object_height_second_to_last_extruder + 1)
     {
