@@ -2,6 +2,7 @@
     "name": "rhobandeps/curaengine",
     "includes": ["src", "libs"],
     "libraries": "build",
+    "links": ["build/libclipper.a", "build/lib_CuraEngine.a"],
     "build": [
         "mkdir build",
         "cd build",
